@@ -1,175 +1,91 @@
-const fs = require("fs");
-const path = require("path");
 const { getPrefix } = global.utils;
-const { commands, aliases } = global.GoatBot;
+const { commands } = global.GoatBot;
 
 module.exports = {
   config: {
     name: "help",
-    version: "3.2",
-    author: "NTKhang // xnil6x",
-    countDown: 5,
+    version: "3.5",
+    author: "Mostakim",
+    usePrefix: false,
     role: 0,
-    description: "View command information with enhanced interface",
     category: "info",
-    guide: {
-      en: "{pn} [command] - View command details\n{pn} all - View all commands\n{pn} c [category] - View commands in category"
-    }
+    priority: 1
   },
 
-  langs: {
-    en: {
-      helpHeader: "╔══════════◇◆◇══════════╗\n"
-                + "      BOT COMMAND LIST\n"
-                + "╠══════════◇◆◇══════════╣",
-      categoryHeader: "\n   ┌────── {category} ──────┐\n",
-      commandItem: "║ │ 🟢 {name}",
-      helpFooter: "║ └─────────────────┘\n"
-                + "╚══════════◇◆◇══════════╝",
-      commandInfo: "╔══════════◇◆◇══════════╗\n"
-                 + "║           COMMAND INFORMATION      \n"
-                 + "╠══════════◇◆◇══════════╣\n"
-                 + "║ 🏷️ Name: {name}\n"
-                 + "║ 📝 Description: {description}\n"
-                 + "║ 📂 Category: {category}\n"
-                 + "║ 🔤 Aliases: {aliases}\n"
-                 + "║ 🏷️ Version: {version}\n"
-                 + "║ 🔒 Permissions: {role}\n"
-                 + "║ ⏱️ Cooldown: {countDown}s\n"
-                 + "║ 🔧 Use Prefix: {usePrefix}\n"
-                 + "║ 👤 Author: {author}\n"
-                 + "╠══════════◇◆◇══════════╣",
-      usageHeader: "║ 🛠️ USAGE GUIDE",
-      usageBody: " ║ {usage}",
-      usageFooter: "╚══════════◇◆◇══════════╝",
-      commandNotFound: "⚠️ Command '{command}' not found!",
-      doNotHave: "None",
-      roleText0: "👥 All Users",
-      roleText1: "👑 Group Admins",
-      roleText2: "⚡ Bot Admins",
-      totalCommands: "📊 Total Commands: {total}\n"
-                  + "xnil"
-    }
-  },
+  onStart: async function ({ message, args, event, threadsData, role }) {
+    const prefix = getPrefix(event.threadID);
+    const arg = args[0]?.toLowerCase();
 
-  onStart: async function({ message, args, event, threadsData, role }) {
-    const { threadID } = event;
-    const prefix = getPrefix(threadID);
-    const commandName = args[0]?.toLowerCase();
-    const bannerPath = path.join(__dirname, "assets", "20250319_111041.png");
+    const header = "╔═━「 𝐇𝐄𝐋𝐏 𝐌𝐄𝐍𝐔 」━═╗";
+    const footer = "╚═━──────────────━═╝";
 
-    if (commandName === 'c' && args[1]) {
-      const categoryArg = args[1].toUpperCase();
-      const commandsInCategory = [];
+    if (!arg) {
+      const list = Array.from(commands.entries())
+        .filter(([_, cmd]) => cmd.config?.role <= role)
+        .map(([name]) => `┃ ✦ ${name}`)
+        .join("\n");
 
-      for (const [name, cmd] of commands) {
-        if (cmd.config.role > 1 && role < cmd.config.role) continue;
-        const category = cmd.config.category?.toUpperCase() || "GENERAL";
-        if (category === categoryArg) {
-          commandsInCategory.push({ name });
-        }
-      }
-
-      if (commandsInCategory.length === 0) {
-        return message.reply(`❌ No commands found in category: ${categoryArg}`);
-      }
-
-      let replyMsg = this.langs.en.helpHeader;
-      replyMsg += this.langs.en.categoryHeader.replace(/{category}/g, categoryArg);
-
-      commandsInCategory.sort((a, b) => a.name.localeCompare(b.name)).forEach(cmd => {
-        replyMsg += this.langs.en.commandItem.replace(/{name}/g, cmd.name) + "\n";
-      });
-
-      replyMsg += this.langs.en.helpFooter;
-      replyMsg += "\n" + this.langs.en.totalCommands.replace(/{total}/g, commandsInCategory.length);
-
-      return message.reply(replyMsg);
+      return message.reply(
+        `${header}\n` +
+        `┃ 🔑 Prefix: ${prefix}\n` +
+        `┃ 📂 Total Commands: ${commands.size}\n` +
+        `┃ ⚙️ Available Commands:\n` +
+        `${list}\n` +
+        `${footer}\n` +
+        `\n📌 Use \`${prefix}help -<category>\` to filter by category\n` +
+        `📌 Use \`${prefix}help <command>\` to see command info`
+      );
     }
 
-    if (!commandName || commandName === 'all') {
-      const categories = new Map();
+    if (arg === "-c" && args[1]) {
+      const cmdName = args[1].toLowerCase();
+      const cmd = commands.get(cmdName) || commands.get(global.GoatBot.aliases.get(cmdName));
 
-      for (const [name, cmd] of commands) {
-        if (cmd.config.role > 1 && role < cmd.config.role) continue;
+      if (!cmd || cmd.config.role > role)
+        return message.reply(`✘ Command "${cmdName}" not found or access denied.`);
 
-        const category = cmd.config.category?.toUpperCase() || "GENERAL";
-        if (!categories.has(category)) {
-          categories.set(category, []);
-        }
-        categories.get(category).push({ name });
-      }
-
-      const sortedCategories = [...categories.keys()].sort();
-      let replyMsg = this.langs.en.helpHeader.replace(/{prefix}/g, prefix);
-      let totalCommands = 0;
-
-      for (const category of sortedCategories) {
-        const commandsInCategory = categories.get(category).sort((a, b) => a.name.localeCompare(b.name));
-        totalCommands += commandsInCategory.length;
-
-        replyMsg += this.langs.en.categoryHeader.replace(/{category}/g, category);
-
-        commandsInCategory.forEach(cmd => {
-          replyMsg += this.langs.en.commandItem.replace(/{name}/g, cmd.name) + "\n";
-        });
-
-        replyMsg += this.langs.en.helpFooter;
-      }
-
-      replyMsg += "\n" + this.langs.en.totalCommands.replace(/{total}/g, totalCommands);
-
-      try {
-        if (fs.existsSync(bannerPath)) {
-          return message.reply({
-            body: replyMsg,
-            attachment: fs.createReadStream(bannerPath)
-          });
-        } else {
-          return message.reply(replyMsg);
-        }
-      } catch (e) {
-        console.error("Couldn't load help banner:", e);
-        return message.reply(replyMsg);
-      }
+      return message.reply(
+        `${header}\n` +
+        `┃ ✦ Command: ${cmdName}\n` +
+        `┃ ✦ Category: ${cmd.config.category || "Uncategorized"}\n` +
+        `${footer}`
+      );
     }
 
-    let cmd = commands.get(commandName) || commands.get(aliases.get(commandName));
-    if (!cmd) {
-      return message.reply(this.langs.en.commandNotFound.replace(/{command}/g, commandName));
+    if (arg.startsWith("-")) {
+      const category = arg.slice(1).toLowerCase();
+      const matched = Array.from(commands.entries())
+        .filter(([_, cmd]) => cmd.config?.category?.toLowerCase() === category && cmd.config.role <= role)
+        .map(([name]) => `┃ ✦ ${name}`);
+
+      if (matched.length === 0)
+        return message.reply(`✘ No commands found under "${category}".`);
+
+      return message.reply(
+        `╔═━「 𝐂𝐀𝐓𝐄𝐆𝐎𝐑𝐘: ${category.toUpperCase()} 」━═╗\n` +
+        `${matched.join("\n")}\n` +
+        `${footer}\n` +
+        `\n📌 Try: \`${prefix}help <command>\` to view details`
+      );
     }
 
-    const config = cmd.config;
-    const description = config.description?.en || config.description || "No description";
-    const aliasesList = config.aliases?.join(", ") || this.langs.en.doNotHave;
-    const category = config.category?.toUpperCase() || "GENERAL";
+    const cmd = commands.get(arg) || commands.get(global.GoatBot.aliases.get(arg));
 
-    let roleText;
-    switch(config.role) {
-      case 1: roleText = this.langs.en.roleText1; break;
-      case 2: roleText = this.langs.en.roleText2; break;
-      default: roleText = this.langs.en.roleText0;
-    }
+    if (!cmd || cmd.config.role > role)
+      return message.reply(`✘ Command "${arg}" not found.`);
 
-    let guide = config.guide?.en || config.usage || config.guide || "No usage guide available";
-    if (typeof guide === "object") guide = guide.body;
-    guide = guide.replace(/\{prefix\}/g, prefix).replace(/\{name\}/g, config.name).replace(/\{pn\}/g, prefix + config.name);
+    const info = cmd.config;
+    const guide = info.guide?.en || "No usage info.";
+    const desc = info.longDescription?.en || "No description.";
 
-    let replyMsg = this.langs.en.commandInfo
-      .replace(/{name}/g, config.name)
-      .replace(/{description}/g, description)
-      .replace(/{category}/g, category)
-      .replace(/{aliases}/g, aliasesList)
-      .replace(/{version}/g, config.version)
-      .replace(/{role}/g, roleText)
-      .replace(/{countDown}/g, config.countDown || 1)
-      .replace(/{usePrefix}/g, typeof config.usePrefix === "boolean" ? (config.usePrefix ? "✅ Yes" : "❌ No") : "❓ Unknown")
-      .replace(/{author}/g, config.author || "Unknown");
-
-    replyMsg += "\n" + this.langs.en.usageHeader + "\n" +
-                this.langs.en.usageBody.replace(/{usage}/g, guide.split("\n").join("\n ")) + "\n" +
-                this.langs.en.usageFooter;
-
-    return message.reply(replyMsg);
+    return message.reply(
+      `╔═━「 𝐂𝐎𝐌𝐌𝐀𝐍𝐃 𝐃𝐄𝐓𝐀𝐈𝐋𝐒 」━═╗\n` +
+      `┃ ✦ Name: ${info.name}\n` +
+      `┃ ✦ Description: ${desc}\n` +
+      `┃ ✦ Usage: ${guide.replace(/{p}/g, prefix).replace(/{n}/g, info.name)}\n` +
+      `┃ ✦ Role: ${info.role}\n` +
+      `┃ ✦ Category: ${info.category || "Uncategorized"}\n` +
+      `${footer}`
+    );
   }
 };
